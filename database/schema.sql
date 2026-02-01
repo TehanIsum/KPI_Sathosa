@@ -47,18 +47,19 @@ CREATE INDEX idx_locations_division ON locations(division_id);
 -- ============================================================================
 -- TABLE: users
 -- Description: System users with role-based access
+-- Notes: This table syncs with auth.users via trigger. The id matches auth.users.id
+--        Authentication is handled by Supabase Auth, not stored here
 -- ============================================================================
 CREATE TABLE users (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     email VARCHAR(255) NOT NULL UNIQUE,
-    password_hash VARCHAR(255) NOT NULL,
     full_name VARCHAR(255) NOT NULL,
     role VARCHAR(50) NOT NULL CHECK (role IN ('admin', 'employee', 'hod', 'executive')),
     can_act_as_hod BOOLEAN DEFAULT false NOT NULL,
     division_id UUID REFERENCES divisions(id) ON DELETE RESTRICT,
     location_id UUID REFERENCES locations(id) ON DELETE RESTRICT,
     is_active BOOLEAN DEFAULT true NOT NULL,
-    is_password_reset_required BOOLEAN DEFAULT true NOT NULL,
+    is_password_reset_required BOOLEAN DEFAULT false NOT NULL,
     last_login TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT now() NOT NULL,
@@ -68,7 +69,8 @@ CREATE TABLE users (
     )
 );
 
-COMMENT ON TABLE users IS 'System users with role-based access control';
+COMMENT ON TABLE users IS 'System users synced with Supabase Auth (auth.users)';
+COMMENT ON COLUMN users.id IS 'Foreign key to auth.users.id - automatically synced via trigger';
 COMMENT ON COLUMN users.role IS 'Primary role: admin, employee, hod, executive';
 COMMENT ON COLUMN users.can_act_as_hod IS 'Allows HODs to login as either HOD or employee';
 COMMENT ON COLUMN users.is_password_reset_required IS 'Forces password reset on first login';
@@ -450,6 +452,85 @@ CREATE TRIGGER audit_kpi_edit_requests AFTER INSERT OR UPDATE OR DELETE ON kpi_e
 
 CREATE TRIGGER audit_users AFTER INSERT OR UPDATE OR DELETE ON users
     FOR EACH ROW EXECUTE FUNCTION create_audit_log();
+
+-- ============================================================================
+-- SUPABASE AUTH INTEGRATION
+-- ============================================================================
+
+-- Function to handle new auth.users and sync with public.users
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+DECLARE
+    user_division_id UUID;
+    user_location_id UUID;
+BEGIN
+    -- Extract division_id and location_id if provided in metadata
+    user_division_id := (NEW.raw_user_meta_data->>'division_id')::UUID;
+    user_location_id := (NEW.raw_user_meta_data->>'location_id')::UUID;
+
+    -- Insert into public.users
+    INSERT INTO public.users (
+        id,
+        email,
+        full_name,
+        role,
+        can_act_as_hod,
+        division_id,
+        location_id,
+        is_active,
+        is_password_reset_required,
+        created_at,
+        updated_at
+    ) VALUES (
+        NEW.id,
+        NEW.email,
+        COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.email),
+        COALESCE(NEW.raw_user_meta_data->>'role', 'employee'),
+        COALESCE((NEW.raw_user_meta_data->>'can_act_as_hod')::boolean, false),
+        user_division_id,
+        user_location_id,
+        COALESCE((NEW.raw_user_meta_data->>'is_active')::boolean, true),
+        COALESCE((NEW.raw_user_meta_data->>'is_password_reset_required')::boolean, false),
+        NOW(),
+        NOW()
+    )
+    ON CONFLICT (id) DO UPDATE SET
+        email = EXCLUDED.email,
+        full_name = EXCLUDED.full_name,
+        role = EXCLUDED.role,
+        can_act_as_hod = EXCLUDED.can_act_as_hod,
+        division_id = EXCLUDED.division_id,
+        location_id = EXCLUDED.location_id,
+        is_active = EXCLUDED.is_active,
+        is_password_reset_required = EXCLUDED.is_password_reset_required,
+        updated_at = NOW();
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Trigger for auth.users insert
+CREATE TRIGGER on_auth_user_created
+    AFTER INSERT ON auth.users
+    FOR EACH ROW
+    EXECUTE FUNCTION public.handle_new_user();
+
+-- Function to handle user deletion (soft delete)
+CREATE OR REPLACE FUNCTION public.handle_user_delete()
+RETURNS TRIGGER AS $$
+BEGIN
+    UPDATE public.users
+    SET is_active = false, updated_at = NOW()
+    WHERE id = OLD.id;
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Trigger for auth.users delete
+CREATE TRIGGER on_auth_user_deleted
+    BEFORE DELETE ON auth.users
+    FOR EACH ROW
+    EXECUTE FUNCTION public.handle_user_delete();
 
 -- ============================================================================
 -- ROW LEVEL SECURITY (RLS) POLICIES

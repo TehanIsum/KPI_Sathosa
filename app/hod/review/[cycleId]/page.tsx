@@ -170,37 +170,39 @@ export default function AllocatePointsPage({ params }: { params: Promise<{ cycle
         </Alert>
       )}
 
-      {/* Points Summary */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Points Distribution</CardTitle>
-          <CardDescription>
-            Total must equal 100 points
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <p className="text-sm text-muted-foreground">Total Allocated</p>
-              <p className="text-3xl font-bold">{totalPoints}</p>
+      {/* Points Summary (Sticky) */}
+      <div className="sticky top-6 z-10">
+        <Card>
+          <CardHeader>
+            <CardTitle>Points Distribution</CardTitle>
+            <CardDescription>
+              Total must equal 100 points
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <p className="text-sm text-muted-foreground">Total Allocated</p>
+                <p className="text-3xl font-bold">{totalPoints}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Remaining</p>
+                <p className={`text-3xl font-bold ${remainingPoints < 0 ? 'text-destructive' : remainingPoints === 0 ? 'text-green-600' : ''}`}>
+                  {remainingPoints}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Total Goals</p>
+                <p className="text-3xl font-bold">{goals.length}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Remaining</p>
-              <p className={`text-3xl font-bold ${remainingPoints < 0 ? 'text-destructive' : remainingPoints === 0 ? 'text-green-600' : ''}`}>
-                {remainingPoints}
-              </p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Total Goals</p>
-              <p className="text-3xl font-bold">{goals.length}</p>
-            </div>
-          </div>
-          <Progress value={Math.min(totalPoints, 100)} />
-          {totalPoints === 100 && (
-            <p className="text-sm text-green-600 font-medium">✓ Points correctly distributed</p>
-          )}
-        </CardContent>
-      </Card>
+            <Progress value={Math.min(totalPoints, 100)} />
+            {totalPoints === 100 && (
+              <p className="text-sm text-green-600 font-medium">✓ Points correctly distributed</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Goals */}
       <div className="space-y-4">

@@ -64,9 +64,9 @@ export default function LoginPage() {
           <CardTitle className="text-3xl font-bold tracking-tight">
             KPI Management System
           </CardTitle>
-          <CardDescription className="text-base">
+          {/* <CardDescription className="text-base">
             Sathosa Motors PLC
-          </CardDescription>
+          </CardDescription> */}
         </CardHeader>
 
         <form onSubmit={handleSubmit}>
@@ -150,14 +150,6 @@ export default function LoginPage() {
           </CardFooter>
         </form>
       </Card>
-
-      <div className="fixed bottom-4 right-4 max-w-xs bg-muted/80 backdrop-blur-sm p-3 rounded-md text-xs text-muted-foreground">
-        <p className="font-semibold mb-1">Test Credentials:</p>
-        <p>admin@sathosa.lk / Password123!</p>
-        <p className="text-[10px] mt-1 text-yellow-600 dark:text-yellow-500">
-          ⚠️ Create auth users first with the Admin API script
-        </p>
-      </div>
     </div>
   )
 }

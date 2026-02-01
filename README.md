@@ -46,7 +46,7 @@ Built on modern, scalable architecture:
 - **Frontend**: Next.js 15+ with React 19+ (Server Components)
 - **Backend**: Next.js Server Actions (TypeScript)
 - **Database**: Supabase (PostgreSQL with RLS)
-- **Authentication**: Custom cookie-based sessions
+- **Authentication**: Supabase Auth (bcrypt-based)
 - **UI**: shadcn/ui + Tailwind CSS
 
 [View detailed architecture →](docs/ARCHITECTURE.md)
@@ -75,12 +75,26 @@ cp .env.example .env.local
 # Edit .env.local with your Supabase credentials
 ```
 
+**Required environment variables:**
+- `NEXT_PUBLIC_SUPABASE_URL` - Your Supabase project URL
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` - Public anon key
+- `SUPABASE_SERVICE_ROLE_KEY` - **Service role key (required for admin user creation)**
+
+⚠️ Get the service role key from: Supabase Dashboard → Settings → API → service_role key
+
+[Having issues with "User not allowed"? →](docs/FIX_USER_NOT_ALLOWED.md)
+
 ### 3. Setup Database
 
-Execute the SQL migrations in your Supabase dashboard:
+Execute the SQL files **in order** in your Supabase SQL Editor:
 
-1. `database/schema.sql` - Creates tables, triggers, RLS policies
-2. `database/seed.sql` - Inserts test data
+1. `database/schema.sql` - Creates tables, triggers, RLS policies, auth integration
+2. `database/seed.sql` - Inserts divisions and locations
+3. `database/create_auth_users.sql` - Creates test users in Supabase Auth
+
+**Important:** The schema includes triggers that automatically sync `auth.users` with `public.users`.
+
+[View detailed auth setup →](docs/SUPABASE_AUTH_INTEGRATION.md)
 
 ### 4. Run Development Server
 
@@ -92,6 +106,8 @@ Open [http://localhost:3000](http://localhost:3000)
 
 ### 5. Login with Test Credentials
 
+Users are created in Supabase Auth (`auth.users`) and automatically synced to `public.users`.
+
 **Admin**
 - Email: `admin@sathosa.lk`
 - Password: `Password123!`
@@ -102,12 +118,18 @@ Open [http://localhost:3000](http://localhost:3000)
 - Password: `Password123!`
 - Role: Employee
 
-[See all test credentials →](docs/DEVELOPER_SETUP.md#test-credentials)
+**HOD**
+- Email: `hod.spareparts@sathosa.lk`
+- Password: `Password123!`
+- Role: Head of Division
+
+[See all test credentials →](docs/SUPABASE_AUTH_INTEGRATION.md#test-users-created)
 
 ⚠️ **Change all passwords in production!**
 
 ## 📖 Documentation
 
+- **[Supabase Auth Integration](docs/SUPABASE_AUTH_INTEGRATION.md)** - Auth setup and user management
 - **[Developer Setup Guide](docs/DEVELOPER_SETUP.md)** - Complete setup instructions
 - **[Database Design](docs/DATABASE_DESIGN.md)** - Schema, ERD, and RLS policies
 - **[System Architecture](docs/ARCHITECTURE.md)** - Technical architecture overview
@@ -129,17 +151,19 @@ KPI-Sathosa/
 │   ├── supabase/         # Database clients
 │   └── types/            # TypeScript types
 ├── database/              # SQL migrations
-│   ├── schema.sql        # Database schema
-│   └── seed.sql          # Seed data
+│   ├── schema.sql                  # Complete schema with auth integration
+│   ├── seed.sql                    # Base data (divisions, locations)
+│   ├── create_auth_users.sql       # Test users for Supabase Auth
+│   └── auth_integration.sql        # Standalone auth setup (optional)
 ├── docs/                  # Documentation
 └── middleware.ts          # Route protection
 ```
 
 ## 🔐 Security Features
 
-- **Authentication**: Bcrypt password hashing, OTP-based password reset
+- **Authentication**: Supabase Auth with bcrypt password hashing
 - **Authorization**: Role-based access control with RLS policies
-- **Session Management**: HTTP-only cookies, 7-day expiry
+- **Session Management**: Supabase managed sessions with automatic refresh
 - **Audit Logging**: Complete trail of all KPI-impacting actions
 - **Data Protection**: SQL injection prevention, XSS protection
 - **Compliance**: OWASP Top 10, least privilege principle
@@ -175,13 +199,14 @@ KPI-Sathosa/
 
 ### Backend
 - **Runtime**: Next.js Server Actions
-- **Authentication**: Custom (bcrypt + cookies)
+- **Authentication**: Supabase Auth (managed)
 - **Validation**: Zod schemas
 
 ### Database
 - **Platform**: Supabase (PostgreSQL)
 - **Security**: Row Level Security (RLS)
-- **ORM**: @supabase/supabase-js
+- **Auth Integration**: Trigger-based sync (auth.users ↔ public.users)
+- **Client**: @supabase/supabase-js
 
 ## 📊 Database Schema
 

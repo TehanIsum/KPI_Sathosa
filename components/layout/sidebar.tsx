@@ -1,6 +1,5 @@
 'use client'
 
-import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
@@ -29,6 +28,8 @@ interface SidebarProps {
   userRole: UserRole
   userName: string
   onLogout: () => void
+  collapsed: boolean
+  onCollapsedChange: (collapsed: boolean) => void
 }
 
 interface NavItem {
@@ -78,6 +79,12 @@ const navItems: NavItem[] = [
     roles: ['hod']
   },
   {
+    title: 'Employee Performance',
+    href: '/hod/performance',
+    icon: BarChart3,
+    roles: ['hod']
+  },
+  {
     title: 'Review Goals',
     href: '/hod/review',
     icon: FileCheck,
@@ -90,21 +97,9 @@ const navItems: NavItem[] = [
     roles: ['hod']
   },
   {
-    title: 'Team Performance',
-    href: '/hod/team',
-    icon: Users,
-    roles: ['hod']
-  },
-  {
     title: 'Location Reports',
     href: '/hod/locations',
     icon: MapPin,
-    roles: ['hod']
-  },
-  {
-    title: 'Division Reports',
-    href: '/hod/reports',
-    icon: BarChart3,
     roles: ['hod']
   },
   // Admin items
@@ -159,8 +154,7 @@ const navItems: NavItem[] = [
   }
 ]
 
-export function Sidebar({ userRole, userName, onLogout }: SidebarProps) {
-  const [collapsed, setCollapsed] = useState(false)
+export function Sidebar({ userRole, userName, onLogout, collapsed, onCollapsedChange }: SidebarProps) {
   const pathname = usePathname()
 
   const userNavItems = navItems.filter((item) => item.roles.includes(userRole))
@@ -184,7 +178,7 @@ export function Sidebar({ userRole, userName, onLogout }: SidebarProps) {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setCollapsed(!collapsed)}
+            onClick={() => onCollapsedChange(!collapsed)}
             className={cn(collapsed && 'mx-auto')}
           >
             {collapsed ? (

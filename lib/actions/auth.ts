@@ -1,6 +1,6 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
 import type { UserRole, SessionUser } from '@/lib/types/database'
 
@@ -273,5 +273,229 @@ export async function changePassword(
   } catch (error) {
     console.error('Change password error:', error)
     return { success: false, error: 'An error occurred. Please try again.' }
+  }
+}
+
+/**
+ * Admin: Create new user
+ * Creates user in both auth.users and public.users via trigger
+ */
+export async function createUser(userData: {
+  email: string
+  fullName: string
+  role: UserRole
+  canActAsHod?: boolean
+  divisionId?: string
+  locationId?: string
+}): Promise<{ success: boolean; message?: string; error?: string; userId?: string }> {
+  try {
+    // Verify admin permission
+    const currentUser = await getCurrentUser()
+    if (!currentUser || currentUser.role !== 'admin') {
+      return { success: false, error: 'Unauthorized. Admin access required.' }
+    }
+
+    // Validate required fields based on role
+    if ((userData.role === 'employee' || userData.role === 'hod') && (!userData.divisionId || !userData.locationId)) {
+      return { success: false, error: 'Division and location are required for employees and HODs' }
+    }
+
+    // Use admin client with service role key
+    const adminClient = createAdminClient()
+
+    // Create user in Supabase Auth with default password
+    const defaultPassword = 'Password123!'
+    const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
+      email: userData.email.toLowerCase().trim(),
+      password: defaultPassword,
+      email_confirm: true,
+      user_metadata: {
+        full_name: userData.fullName,
+        role: userData.role,
+        can_act_as_hod: userData.canActAsHod || false,
+        division_id: userData.divisionId || null,
+        location_id: userData.locationId || null,
+        is_active: true,
+        is_password_reset_required: true, // Force password change on first login
+      },
+    })
+
+    if (authError) {
+      console.error('Create user error:', authError)
+      if (authError.message.includes('already registered')) {
+        return { success: false, error: 'Email already registered' }
+      }
+      return { success: false, error: authError.message || 'Failed to create user' }
+    }
+
+    if (!authData.user) {
+      return { success: false, error: 'Failed to create user' }
+    }
+
+    // The trigger will automatically create the public.users record
+    // Wait a moment for the trigger to complete
+    await new Promise(resolve => setTimeout(resolve, 500))
+
+    // Verify the user was created in public.users (use regular client for query)
+    const supabase = await createClient()
+    const { data: publicUser, error: publicError } = await supabase
+      .from('users')
+      .select('id, email, full_name, role')
+      .eq('id', authData.user.id)
+      .single()
+
+    if (publicError || !publicUser) {
+      console.error('Public user verification error:', publicError)
+      // Try to clean up auth user if public user creation failed
+      await adminClient.auth.admin.deleteUser(authData.user.id)
+      return { success: false, error: 'Failed to create user profile. Please try again.' }
+    }
+
+    return {
+      success: true,
+      message: `User created successfully. Default password: ${defaultPassword}`,
+      userId: authData.user.id,
+    }
+  } catch (error) {
+    console.error('Create user error:', error)
+    return { success: false, error: 'An unexpected error occurred' }
+  }
+}
+
+/**
+ * Admin: Update user details
+ */
+export async function updateUser(
+  userId: string,
+  updates: {
+    fullName?: string
+    role?: UserRole
+    canActAsHod?: boolean
+    divisionId?: string | null
+    locationId?: string | null
+    isActive?: boolean
+  }
+): Promise<{ success: boolean; message?: string; error?: string }> {
+  try {
+    // Verify admin permission
+    const currentUser = await getCurrentUser()
+    if (!currentUser || currentUser.role !== 'admin') {
+      return { success: false, error: 'Unauthorized. Admin access required.' }
+    }
+
+    const supabase = await createClient()
+
+    // Update public.users
+    const publicUpdates: any = {}
+    if (updates.fullName !== undefined) publicUpdates.full_name = updates.fullName
+    if (updates.role !== undefined) publicUpdates.role = updates.role
+    if (updates.canActAsHod !== undefined) publicUpdates.can_act_as_hod = updates.canActAsHod
+    if (updates.divisionId !== undefined) publicUpdates.division_id = updates.divisionId
+    if (updates.locationId !== undefined) publicUpdates.location_id = updates.locationId
+    if (updates.isActive !== undefined) publicUpdates.is_active = updates.isActive
+
+    const { error: publicError } = await supabase
+      .from('users')
+      .update(publicUpdates)
+      .eq('id', userId)
+
+    if (publicError) {
+      console.error('Update user error:', publicError)
+      return { success: false, error: 'Failed to update user' }
+    }
+
+    // Update auth.users metadata using admin client
+    const metadataUpdates: any = {}
+    if (updates.fullName) metadataUpdates.full_name = updates.fullName
+    if (updates.role) metadataUpdates.role = updates.role
+    if (updates.canActAsHod !== undefined) metadataUpdates.can_act_as_hod = updates.canActAsHod
+    if (updates.divisionId !== undefined) metadataUpdates.division_id = updates.divisionId
+    if (updates.locationId !== undefined) metadataUpdates.location_id = updates.locationId
+    if (updates.isActive !== undefined) metadataUpdates.is_active = updates.isActive
+
+    if (Object.keys(metadataUpdates).length > 0) {
+      const adminClient = createAdminClient()
+      await adminClient.auth.admin.updateUserById(userId, {
+        user_metadata: metadataUpdates,
+      })
+    }
+
+    return { success: true, message: 'User updated successfully' }
+  } catch (error) {
+    console.error('Update user error:', error)
+    return { success: false, error: 'An unexpected error occurred' }
+  }
+}
+
+/**
+ * Admin: Delete user (soft delete)
+ */
+export async function deleteUser(userId: string): Promise<{ success: boolean; message?: string; error?: string }> {
+  try {
+    // Verify admin permission
+    const currentUser = await getCurrentUser()
+    if (!currentUser || currentUser.role !== 'admin') {
+      return { success: false, error: 'Unauthorized. Admin access required.' }
+    }
+
+    const supabase = await createClient()
+
+    // Soft delete in public.users
+    const { error: deactivateError } = await supabase
+      .from('users')
+      .update({ is_active: false })
+      .eq('id', userId)
+
+    if (deactivateError) {
+      console.error('Deactivate user error:', deactivateError)
+      return { success: false, error: 'Failed to deactivate user' }
+    }
+
+    return { success: true, message: 'User deactivated successfully' }
+  } catch (error) {
+    console.error('Delete user error:', error)
+    return { success: false, error: 'An unexpected error occurred' }
+  }
+}
+
+/**
+ * Admin: Reset user password to default
+ */
+export async function resetUserPassword(userId: string): Promise<{ success: boolean; message?: string; error?: string }> {
+  try {
+    // Verify admin permission
+    const currentUser = await getCurrentUser()
+    if (!currentUser || currentUser.role !== 'admin') {
+      return { success: false, error: 'Unauthorized. Admin access required.' }
+    }
+
+    // Use admin client for password reset
+    const adminClient = createAdminClient()
+
+    // Reset to default password
+    const defaultPassword = 'Password123!'
+    const { error: resetError } = await adminClient.auth.admin.updateUserById(userId, {
+      password: defaultPassword,
+    })
+
+    if (resetError) {
+      console.error('Reset password error:', resetError)
+      return { success: false, error: 'Failed to reset password' }
+    }
+
+    // Mark password reset as required (use regular client for queries)
+    const supabase = await createClient()
+    await supabase
+      .from('users')
+      .update({ is_password_reset_required: true })
+      .eq('id', userId)
+
+    return { 
+      success: true, 
+      message: `Password reset to default: ${defaultPassword}` 
+    }
+  } catch (error) {
+    console.error('Reset password error:', error)
+    return { success: false, error: 'An unexpected error occurred' }
   }
 }

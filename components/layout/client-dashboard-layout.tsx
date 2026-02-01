@@ -15,6 +15,7 @@ export function ClientDashboardLayout({ children }: ClientDashboardLayoutProps) 
   const router = useRouter()
   const [user, setUser] = useState<SessionUser | null>(null)
   const [loading, setLoading] = useState(true)
+  const [collapsed, setCollapsed] = useState(false)
 
   useEffect(() => {
     const loadUser = async () => {
@@ -45,8 +46,16 @@ export function ClientDashboardLayout({ children }: ClientDashboardLayoutProps) 
 
   return (
     <div className="flex min-h-screen">
-      <Sidebar userRole={user.role} userName={user.full_name} onLogout={handleLogout} />
-      <main className="flex-1 transition-all duration-300 ml-64">
+      <Sidebar 
+        userRole={user.role} 
+        userName={user.full_name} 
+        onLogout={handleLogout}
+        collapsed={collapsed}
+        onCollapsedChange={setCollapsed}
+      />
+      <main className={
+        `flex-1 transition-all duration-300 ${collapsed ? 'ml-16' : 'ml-64'}`
+      }>
         {children}
       </main>
     </div>

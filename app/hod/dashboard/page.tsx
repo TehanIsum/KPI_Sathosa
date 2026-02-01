@@ -113,20 +113,9 @@ export default async function HODDashboard() {
               <CardDescription>View performance by employee</CardDescription>
             </CardHeader>
             <CardContent>
-              <Button className="w-full" variant="outline" disabled>Coming Soon</Button>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <MapPin className="w-5 h-5" />
-                Location Performance
-              </CardTitle>
-              <CardDescription>View performance by location</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button className="w-full" variant="outline" disabled>Coming Soon</Button>
+              <Link href="/hod/performance">
+                <Button className="w-full">View Performance</Button>
+              </Link>
             </CardContent>
           </Card>
 
@@ -137,19 +126,6 @@ export default async function HODDashboard() {
                 Edit Requests
               </CardTitle>
               <CardDescription>Approve or reject KPI change requests</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button className="w-full" variant="outline" disabled>Coming Soon</Button>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <TrendingUp className="w-5 h-5" />
-                Division Reports
-              </CardTitle>
-              <CardDescription>Generate performance reports</CardDescription>
             </CardHeader>
             <CardContent>
               <Button className="w-full" variant="outline" disabled>Coming Soon</Button>
