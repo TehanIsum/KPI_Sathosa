@@ -4,9 +4,9 @@ import type { NextRequest } from 'next/server'
 import type { UserRole } from '@/lib/types/database'
 
 /**
- * Middleware for authentication and role-based access control using Supabase Auth
+ * Proxy for authentication and role-based access control using Supabase Auth
  */
-export async function middleware(request: NextRequest) {
+export default async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   let response = NextResponse.next({
